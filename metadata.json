@@ -1,0 +1,5 @@
+{
+  "name": "AI Business Advisor",
+  "description": "An AI-powered voice assistant for business analytics with dynamic dashboards and report generation.",
+  "requestFramePermissions": ["microphone"]
+}
