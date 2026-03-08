@@ -1,0 +1,31 @@
+--- Match found at line 10140 ---
+export declare interface Transcription {
+    /** Transcription text.
+     */
+    text?: string;
+    /** The bool indicates the end of the transcription.
+     */
+    finished?: boolean;
+}
+
+/** TunedModel for the Tuned Model of a Tuning Job. */
+export declare interface TunedModel {
+    /** Output only. The resource name of the TunedModel.
+     Format: `projects/{project}/locations/{location}/models/{model}@{version_id}`
+     When tuning from a base model, the version_id will be 1.
+     For continuous tuning, the version id will be incremented by 1 from the
+     last version id in the parent model. E.g., `projects/{project}/locations/{location}/models/{model}@{last_version_id + 1}`
+     */
+    model?: string;
+    /** Output only. A resource name of an Endpoint.
+     Format: `projects/{project}/locations/{location}/endpoints/{endpoint}`.
+     */
+    endpoint?: string;
+    /** The checkpoints associated with this TunedModel.
+     This field is only populated for tuning jobs that enable intermediate
+     checkpoints. */
+    checkpoints?: TunedModelCheckpoint[];
+}
+
+/** TunedModelCheckpoint for the Tuned Model of a Tuning Job. */
+export declare interface TunedModelCheckpoint {
