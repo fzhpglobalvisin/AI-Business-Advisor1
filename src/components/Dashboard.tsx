@@ -1,46 +1,67 @@
-import { useMemo } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  XAxis,
-  YAxis,
-  CartesianGrid,
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Title,
   Tooltip,
-  ResponsiveContainer,
-  Cell,
-  ScatterChart,
-  Scatter,
-  AreaChart,
-  Area,
-} from "recharts";
+  Legend,
+  Filler,
+} from "chart.js";
+import { Bar, Line, Pie, Doughnut, Scatter } from "react-chartjs-2";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 interface DashboardProps {
   data: any[];
 }
 
-const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
+interface ColumnInfo {
+  name: string;
+  type: "numeric" | "categorical";
+  uniqueValues: number;
+}
 
-function analyzeColumns(data: any[]) {
-  if (!data || data.length === 0) return { numeric: [] as string[], categorical: [] as string[] };
-  
+function analyzeData(data: any[]): { columns: ColumnInfo[]; numeric: string[]; categorical: string[] } {
+  if (!data || data.length === 0) return { columns: [], numeric: [], categorical: [] };
+
   const keys = Object.keys(data[0]);
-  const analysis = { numeric: [] as string[], categorical: [] as string[] };
-  
+  const numeric: string[] = [];
+  const categorical: string[] = [];
+  const columns: ColumnInfo[] = [];
+
   keys.forEach(key => {
-    const values = data.map(row => row[key]).filter(v => v !== null && v !== undefined);
-    const isNumeric = values.every(v => !isNaN(parseFloat(String(v))) && isFinite(Number(v)));
-    if (isNumeric && new Set(values).size > 2) {
-      analysis.numeric.push(key);
-    } else {
-      analysis.categorical.push(key);
-    }
+    const values = data.map(row => row[key]).filter(v => v !== null && v !== undefined && v !== "");
+    const uniqueValues = new Set(values).size;
+    
+    const isNumeric = values.every(v => {
+      const num = parseFloat(String(v));
+      return !isNaN(num) && isFinite(num);
+    });
+
+    const type = isNumeric && uniqueValues > 2 ? "numeric" : "categorical";
+    
+    columns.push({ name: key, type, uniqueValues });
+    if (isNumeric && uniqueValues > 2) numeric.push(key);
+    else categorical.push(key);
   });
-  
-  return analysis;
+
+  return { columns, numeric, categorical };
 }
 
 function aggregateData(data: any[], groupBy: string, valueKey: string, limit: number = 10) {
@@ -53,135 +74,297 @@ function aggregateData(data: any[], groupBy: string, valueKey: string, limit: nu
   return Object.entries(grouped)
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
-    .map(([name, value]) => ({ name, value }));
+    .map(([label, value]) => ({ label, value }));
 }
 
-function createHistogramData(data: any[], numericKey: string) {
-  const values = data.map(row => parseFloat(row[numericKey])).filter(v => !isNaN(v));
-  if (values.length === 0) return [];
+function createHistogramData(data: any[], column: string) {
+  const values = data.map(row => parseFloat(row[column])).filter(v => !isNaN(v));
+  if (values.length === 0) return { labels: [], data: [] };
+  
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const range = max - min;
-  const bucketCount = Math.min(10, Math.ceil(Math.sqrt(values.length)));
-  const bucketSize = range / bucketCount || 1;
-  const buckets = Array(bucketCount).fill(0).map((_, i) => ({ range: `${(min + i * bucketSize).toFixed(1)}`, count: 0 }));
+  const binCount = Math.min(10, Math.ceil(Math.sqrt(values.length)));
+  const binSize = (max - min) / binCount || 1;
+  
+  const bins = Array(binCount).fill(0).map((_, i) => ({
+    label: `${(min + i * binSize).toFixed(1)}`,
+    value: 0
+  }));
+  
   values.forEach(v => {
-    const idx = Math.min(Math.floor((v - min) / bucketSize), bucketCount - 1);
-    buckets[idx].count++;
+    const binIndex = Math.min(Math.floor((v - min) / binSize), binCount - 1);
+    bins[binIndex].value++;
   });
-  return buckets;
+  
+  return { labels: bins.map(b => b.label), data: bins.map(b => b.value) };
 }
 
+const COLORS = [
+  "rgba(59, 130, 246, 0.8)",
+  "rgba(16, 185, 129, 0.8)",
+  "rgba(245, 158, 11, 0.8)",
+  "rgba(239, 68, 68, 0.8)",
+  "rgba(139, 92, 246, 0.8)",
+  "rgba(236, 72, 153, 0.8)",
+  "rgba(6, 182, 212, 0.8)",
+  "rgba(132, 204, 22, 0.8)",
+];
+
 export function Dashboard({ data }: DashboardProps) {
-  const { numeric, categorical } = analyzeColumns(data);
+  const [chartType, setChartType] = useState<string>("all");
   
-  const chartConfigs = useMemo(() => {
-    if (!data || data.length === 0 || numeric.length === 0) return [];
-    
-    const configs = [];
-    const numKey = numeric[0];
-    const catKey = categorical[0];
-    
-    // Pie chart
-    if (catKey) {
-      configs.push({ id: 'pie', type: 'pie' as const, title: `${numKey} by ${catKey}`, data: aggregateData(data, catKey, numKey, 8) });
+  const { columns, numeric, categorical } = useMemo(() => analyzeData(data), [data]);
+
+  const charts = useMemo(() => {
+    if (!data.length || numeric.length === 0) return [];
+
+    const result = [];
+    const numCol = numeric[0];
+    const catCol = categorical[0] || "index";
+    const numCol2 = numeric[1];
+
+    // 1. Histogram (Bar chart with binned data)
+    const histData = createHistogramData(data, numCol);
+    if (histData.labels.length > 0) {
+      result.push({
+        id: "histogram",
+        title: `Histogram: ${numCol}`,
+        chart: (
+          <Bar
+            data={{
+              labels: histData.labels,
+              datasets: [{
+                label: "Count",
+                data: histData.data,
+                backgroundColor: "rgba(139, 92, 246, 0.8)",
+                borderColor: "rgba(139, 92, 246, 1)",
+                borderWidth: 1,
+              }]
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { grid: { color: "#3f3f46" }, ticks: { color: "#a1a1aa" } },
+                y: { grid: { color: "#3f3f46" }, ticks: { color: "#a1a1aa" } }
+              }
+            }}
+          />
+        )
+      });
     }
-    
-    // Bar chart
-    if (catKey) {
-      configs.push({ id: 'bar', type: 'bar' as const, title: `${numKey} by ${catKey}`, data: aggregateData(data, catKey, numKey, 12) });
+
+    // 2. Pie Chart
+    if (catCol && catCol !== numCol) {
+      const pieData = aggregateData(data, catCol, numCol, 8);
+      if (pieData.length > 0) {
+        result.push({
+          id: "pie",
+          title: `Pie: ${numCol} by ${catCol}`,
+          chart: (
+            <Pie
+              data={{
+                labels: pieData.map(d => d.label),
+                datasets: [{
+                  data: pieData.map(d => d.value),
+                  backgroundColor: COLORS,
+                  borderColor: "#18181b",
+                  borderWidth: 2,
+                }]
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: "right", labels: { color: "#a1a1aa" } } }
+              }}
+            />
+          )
+        });
+      }
     }
-    
-    // Line chart
-    configs.push({ id: 'line', type: 'line' as const, title: `${numKey} Trend`, data: data.slice(0, 30).map((r, i) => ({ ...r, index: i + 1 })) });
-    
-    // Area chart
-    configs.push({ id: 'area', type: 'area' as const, title: `${numKey} Area`, data: data.slice(0, 30).map((r, i) => ({ ...r, index: i + 1 })) });
-    
-    // Histogram
-    configs.push({ id: 'histogram', type: 'histogram' as const, title: `${numKey} Distribution`, data: createHistogramData(data, numKey) });
-    
-    // Scatter (if 2 numeric)
-    if (numeric.length >= 2) {
-      configs.push({ id: 'scatter', type: 'scatter' as const, title: `${numeric[0]} vs ${numeric[1]}`, data: data.slice(0, 50) });
+
+    // 3. Bar Chart
+    if (catCol) {
+      const barData = aggregateData(data, catCol, numCol, 12);
+      if (barData.length > 0) {
+        result.push({
+          id: "bar",
+          title: `Bar: ${numCol} by ${catCol}`,
+          chart: (
+            <Bar
+              data={{
+                labels: barData.map(d => d.label),
+                datasets: [{
+                  label: numCol,
+                  data: barData.map(d => d.value),
+                  backgroundColor: "rgba(59, 130, 246, 0.8)",
+                  borderColor: "rgba(59, 130, 246, 1)",
+                  borderWidth: 1,
+                }]
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: "x",
+                plugins: { legend: { display: false } },
+                scales: {
+                  x: { grid: { color: "#3f3f46" }, ticks: { color: "#a1a1aa" } },
+                  y: { grid: { color: "#3f3f46" }, ticks: { color: "#a1a1aa" } }
+                }
+              }}
+            />
+          )
+        });
+      }
     }
-    
-    return configs;
+
+    // 4. Line Chart
+    const lineData = data.slice(0, 50);
+    result.push({
+      id: "line",
+      title: `Line: ${numCol} Trend`,
+      chart: (
+        <Line
+          data={{
+            labels: lineData.map((_, i) => i + 1),
+            datasets: [{
+              label: numCol,
+              data: lineData.map(d => d[numCol]),
+              borderColor: "rgba(16, 185, 129, 1)",
+              backgroundColor: "rgba(16, 185, 129, 0.1)",
+              fill: true,
+              tension: 0.4,
+              pointRadius: 3,
+              pointBackgroundColor: "rgba(16, 185, 129, 1)",
+            }]
+          }}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { grid: { color: "#3f3f46" }, ticks: { color: "#a1a1aa" } },
+              y: { grid: { color: "#3f3f46" }, ticks: { color: "#a1a1aa" } }
+            }
+          }}
+        />
+      )
+    });
+
+    // 5. Doughnut Chart
+    if (catCol) {
+      const doughnutData = aggregateData(data, catCol, numCol, 6);
+      if (doughnutData.length > 0) {
+        result.push({
+          id: "doughnut",
+          title: `Doughnut: ${numCol} by ${catCol}`,
+          chart: (
+            <Doughnut
+              data={{
+                labels: doughnutData.map(d => d.label),
+                datasets: [{
+                  data: doughnutData.map(d => d.value),
+                  backgroundColor: COLORS,
+                  borderColor: "#18181b",
+                  borderWidth: 2,
+                }]
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: "right", labels: { color: "#a1a1aa" } } }
+              }}
+            />
+          )
+        });
+      }
+    }
+
+    // 6. Scatter Plot
+    if (numCol2) {
+      result.push({
+        id: "scatter",
+        title: `Scatter: ${numCol} vs ${numCol2}`,
+        chart: (
+          <Scatter
+            data={{
+              datasets: [{
+                label: `${numCol} vs ${numCol2}`,
+                data: data.slice(0, 50).map(d => ({ x: d[numCol], y: d[numCol2] })),
+                backgroundColor: "rgba(236, 72, 153, 0.8)",
+                pointRadius: 6,
+                pointHoverRadius: 8,
+              }]
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { grid: { color: "#3f3f46" }, ticks: { color: "#a1a1aa" }, title: { display: true, text: numCol, color: "#a1a1aa" } },
+                y: { grid: { color: "#3f3f46" }, ticks: { color: "#a1a1aa" }, title: { display: true, text: numCol2, color: "#a1a1aa" } }
+              }
+            }}
+          />
+        )
+      });
+    }
+
+    return result;
   }, [data, numeric, categorical]);
 
-  if (!data || data.length === 0 || numeric.length === 0) {
+  const filteredCharts = chartType === "all" 
+    ? charts 
+    : charts.filter(c => c.id === chartType);
+
+  if (!data.length || numeric.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-zinc-500 p-8 text-center">
         <div>
           <p className="mb-2">Upload a dataset with numeric columns to view charts</p>
-          <p className="text-sm text-zinc-600">Charts: Pie, Bar, Line, Area, Histogram, Scatter</p>
+          <p className="text-sm text-zinc-600">Charts: Histogram, Pie, Bar, Line, Doughnut, Scatter</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
-      {chartConfigs.map((config) => (
-        <div key={config.id} className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 shadow-xl flex flex-col">
-          <div className="mb-4">
-            <h3 className="text-lg font-medium text-zinc-100">{config.title}</h3>
-            <p className="text-xs text-zinc-500 mt-1">{config.type.toUpperCase()} • {data.length} records</p>
+    <div className="p-4">
+      {/* Chart Type Selector */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        <button
+          onClick={() => setChartType("all")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            chartType === "all" ? "bg-emerald-500 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+          }`}
+        >
+          All Charts
+        </button>
+        {charts.map(chart => (
+          <button
+            key={chart.id}
+            onClick={() => setChartType(chart.id)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              chartType === chart.id ? "bg-emerald-500 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+            }`}
+          >
+            {chart.title.split(":")[0]}
+          </button>
+        ))}
+      </div>
+
+      {/* Charts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {filteredCharts.map(chart => (
+          <div key={chart.id} className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4">
+            <h3 className="text-sm font-medium text-zinc-300 mb-4">{chart.title}</h3>
+            <div className="h-64">
+              {chart.chart}
+            </div>
           </div>
-          <div className="h-64 flex-1">
-            <ResponsiveContainer width="100%" height="100%">
-              {config.type === 'bar' ? (
-                <BarChart data={config.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" vertical={false} />
-                  <XAxis dataKey="name" stroke="#a1a1aa" fontSize={11} tickLine={false} axisLine={false} interval={0} tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={60} />
-                  <YAxis stroke="#a1a1aa" fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#27272a", borderRadius: "8px" }} />
-                  <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              ) : config.type === 'line' ? (
-                <LineChart data={config.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" vertical={false} />
-                  <XAxis dataKey="index" stroke="#a1a1aa" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#a1a1aa" fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#27272a", borderRadius: "8px" }} />
-                  <Line type="monotone" dataKey={numeric[0]} stroke="#10b981" strokeWidth={3} dot={false} />
-                </LineChart>
-              ) : config.type === 'area' ? (
-                <AreaChart data={config.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" vertical={false} />
-                  <XAxis dataKey="index" stroke="#a1a1aa" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#a1a1aa" fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#27272a", borderRadius: "8px" }} />
-                  <Area type="monotone" dataKey={numeric[0]} stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.3} strokeWidth={2} />
-                </AreaChart>
-              ) : config.type === 'pie' ? (
-                <PieChart>
-                  <Tooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#27272a", borderRadius: "8px" }} />
-                  <Pie data={config.data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={40} paddingAngle={2} label={({ name, percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''} labelLine={false}>
-                    {config.data.map((_: any, i: number) => <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                </PieChart>
-              ) : config.type === 'histogram' ? (
-                <BarChart data={config.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" vertical={false} />
-                  <XAxis dataKey="range" stroke="#a1a1aa" fontSize={10} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#a1a1aa" fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#27272a", borderRadius: "8px" }} />
-                  <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              ) : config.type === 'scatter' ? (
-                <ScatterChart margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-                  <XAxis type="number" dataKey={numeric[1]} stroke="#a1a1aa" fontSize={11} name={numeric[1]} />
-                  <YAxis type="number" dataKey={numeric[0]} stroke="#a1a1aa" fontSize={11} name={numeric[0]} />
-                  <Tooltip contentStyle={{ backgroundColor: "#18181b", borderColor: "#27272a", borderRadius: "8px" }} cursor={{ strokeDasharray: '3 3' }} />
-                  <Scatter name="Data" data={config.data} fill="#ec4899" />
-                </ScatterChart>
-              ) : null}
-            </ResponsiveContainer>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
