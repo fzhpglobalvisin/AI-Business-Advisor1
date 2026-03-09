@@ -8,15 +8,19 @@ export async function generateDashboardConfig(data: any[]): Promise<ChartConfig[
   if (!data || data.length === 0) return [];
   
   const keys = Object.keys(data[0]);
-  const numericKeys = keys.filter(k => typeof data[0][k] === 'number');
+  const numericKeys = keys.filter(k => typeof data[0][k] === 'number' || (!isNaN(parseFloat(data[0][k])) && isFinite(data[0][k])));
   const stringKeys = keys.filter(k => typeof data[0][k] === 'string');
   
-  if (!ai) {
-    if (numericKeys.length > 0 && stringKeys.length > 0) {
+  if (!ai || numericKeys.length === 0 || stringKeys.length === 0) {
+    if (keys.length >= 2) {
       return [
-        { id: 'chart1', type: 'bar', title: 'Data Overview', dataKey: numericKeys[0], xAxisKey: stringKeys[0] },
-        { id: 'chart2', type: 'line', title: 'Trend Analysis', dataKey: numericKeys[0], xAxisKey: stringKeys[0] },
+        { id: 'chart1', type: 'bar', title: 'Overview', dataKey: keys[1], xAxisKey: keys[0] },
+        { id: 'chart2', type: 'line', title: 'Trend', dataKey: keys[1], xAxisKey: keys[0] },
+        { id: 'chart3', type: 'pie', title: 'Distribution', dataKey: keys[1], xAxisKey: keys[0] },
       ];
+    }
+    if (keys.length === 1) {
+      return [{ id: 'chart1', type: 'bar', title: 'Data', dataKey: keys[0], xAxisKey: 'index' }];
     }
     return [];
   }
@@ -44,7 +48,7 @@ export async function generateDashboardConfig(data: any[]): Promise<ChartConfig[
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.0-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -98,7 +102,7 @@ export async function generateReport(data: any[], language: string): Promise<str
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-2.0-flash",
       contents: prompt,
     });
 
