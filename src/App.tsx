@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from "motion/react";
 import { Download, Globe, BarChart3, FileText, Loader2, Table } from "lucide-react";
 import Markdown from "react-markdown";
 import { VoiceAssistant } from "@/components/VoiceAssistant";
-import { Dashboard, ChartConfig } from "@/components/Dashboard";
+import { Dashboard } from "@/components/Dashboard";
 import { FileUpload } from "@/components/FileUpload";
 import { useGemini } from "@/hooks/useGemini";
-import { generateDashboardConfig, generateReport } from "@/lib/ai";
+import { generateReport } from "@/lib/ai";
 import { cn } from "@/lib/utils";
 
 const LANGUAGES = [
@@ -21,9 +21,7 @@ const LANGUAGES = [
 export default function App() {
   const [data, setData] = useState<any[]>([]);
   const [fileName, setFileName] = useState<string>("");
-  const [configs, setConfigs] = useState<ChartConfig[]>([]);
   const [language, setLanguage] = useState(LANGUAGES[0]);
-  const [isGeneratingDashboard, setIsGeneratingDashboard] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [report, setReport] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'report' | 'dataset'>('dashboard');
@@ -44,15 +42,6 @@ export default function App() {
     setFileName(name);
     setReport(null);
     setActiveTab('dataset');
-
-    if (loadedData.length > 0) {
-      setIsGeneratingDashboard(true);
-      const newConfigs = await generateDashboardConfig(loadedData);
-      setConfigs(newConfigs);
-      setIsGeneratingDashboard(false);
-    } else {
-      setConfigs([]);
-    }
   };
 
   const handleToggleVoice = () => {
@@ -241,25 +230,14 @@ export default function App() {
             <div className="flex-1 relative overflow-y-auto">
               <AnimatePresence mode="wait">
                 {activeTab === 'dashboard' ? (
-                  isGeneratingDashboard ? (
-                    <motion.div
-                      key="loading-dash"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="absolute inset-0 flex flex-col items-center justify-center text-zinc-400"
-                    >
-                      <Loader2 className="w-8 h-8 animate-spin mb-4 text-emerald-500" />
-                      <p>Analyzing dataset and generating insights...</p>
-                    </motion.div>
-                  ) : data.length > 0 && configs.length > 0 ? (
+                  data.length > 0 ? (
                     <motion.div
                       key="dashboard"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       className="h-full"
                     >
-                      <Dashboard data={data} configs={configs} />
+                      <Dashboard data={data} />
                     </motion.div>
                   ) : (
                     <motion.div
