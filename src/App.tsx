@@ -36,13 +36,14 @@ export default function App() {
     isSpeaking,
     isListening,
     error,
+    captions,
   } = useGemini();
 
   const handleDataLoaded = async (loadedData: any[], name: string) => {
     setData(loadedData);
     setFileName(name);
     setReport(null);
-    setActiveTab('dashboard');
+    setActiveTab('dataset');
 
     if (loadedData.length > 0) {
       setIsGeneratingDashboard(true);
@@ -175,6 +176,7 @@ export default function App() {
               isSpeaking={isSpeaking}
               isConnecting={isConnecting}
               onToggle={handleToggleVoice}
+              captions={captions}
             />
 
             {error && (
@@ -197,16 +199,6 @@ export default function App() {
             <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
               <div className="flex bg-zinc-900/80 p-1 rounded-lg border border-zinc-800">
                 <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className={cn(
-                    "flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
-                    activeTab === 'dashboard' ? "bg-zinc-800 text-zinc-100 shadow-sm" : "text-zinc-400 hover:text-zinc-200"
-                  )}
-                >
-                  <BarChart3 className="w-4 h-4" />
-                  <span>Dashboard</span>
-                </button>
-                <button
                   onClick={() => setActiveTab('dataset')}
                   className={cn(
                     "flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
@@ -215,6 +207,16 @@ export default function App() {
                 >
                   <Table className="w-4 h-4" />
                   <span>Dataset</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('dashboard')}
+                  className={cn(
+                    "flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                    activeTab === 'dashboard' ? "bg-zinc-800 text-zinc-100 shadow-sm" : "text-zinc-400 hover:text-zinc-200"
+                  )}
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  <span>Dashboard</span>
                 </button>
                 <button
                   onClick={handleGenerateReport}
