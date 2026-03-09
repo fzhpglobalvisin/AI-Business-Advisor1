@@ -84,10 +84,10 @@ export function VoiceAssistant({
         </motion.button>
       </div>
 
-      {/* Captions display */}
+      {/* Captions display - current conversation first */}
       {captions.length > 0 && (
         <div className="w-full max-w-md mt-6 space-y-3 max-h-48 overflow-y-auto">
-          {captions.map((caption) => (
+          {[...captions].reverse().map((caption) => (
             <div
               key={caption.id}
               className={cn(
