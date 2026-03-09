@@ -1,10 +1,12 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ChartConfig } from "@/components/Dashboard";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const apiKey = process.env.GEMINI_API_KEY;
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export async function generateDashboardConfig(data: any[]): Promise<ChartConfig[]> {
   if (!data || data.length === 0) return [];
+  if (!ai) return [];
 
   // Take a sample of the data to avoid exceeding context limits
   const sample = data.slice(0, 5);
@@ -63,6 +65,7 @@ export async function generateDashboardConfig(data: any[]): Promise<ChartConfig[
 
 export async function generateReport(data: any[], language: string): Promise<string> {
   if (!data || data.length === 0) return "No data available to generate a report.";
+  if (!ai) return "AI API key not configured. Please set GEMINI_API_KEY to use this feature.";
 
   const sample = data.slice(0, 50); // Send up to 50 rows for context
 

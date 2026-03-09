@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const apiKey = process.env.GEMINI_API_KEY;
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export interface Caption {
   id: string;
@@ -66,6 +67,10 @@ export function useGemini() {
   };
 
   const connect = useCallback(async (systemInstruction: string, language: string) => {
+    if (!ai) {
+      setError("AI API key not configured. Please set GEMINI_API_KEY.");
+      return;
+    }
     try {
       setIsConnecting(true);
       setError(null);
