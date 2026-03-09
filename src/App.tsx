@@ -68,7 +68,7 @@ export default function App() {
         Answer their questions concisely and professionally based on this data.
         If they ask about trends, analyze the sample and infer insights.
       `;
-      connect(systemInstruction, language.name);
+      connect(systemInstruction, language.code.split('-')[0]);
     }
   };
 

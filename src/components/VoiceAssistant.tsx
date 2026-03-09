@@ -102,7 +102,7 @@ export function VoiceAssistant({
               ) : (
                 <Bot className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
               )}
-              <span className="text-zinc-300">{caption.text}</span>
+              <span className="text-zinc-300" dir="auto">{caption.text}</span>
             </div>
           ))}
         </div>
