@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Download, Globe, BarChart3, FileText, Loader2 } from "lucide-react";
+import { Download, Globe, BarChart3, FileText, Loader2, Table } from "lucide-react";
 import Markdown from "react-markdown";
 import { VoiceAssistant } from "@/components/VoiceAssistant";
 import { Dashboard, ChartConfig } from "@/components/Dashboard";
@@ -26,7 +26,7 @@ export default function App() {
   const [isGeneratingDashboard, setIsGeneratingDashboard] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [report, setReport] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'report'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'report' | 'dataset'>('dashboard');
 
   const {
     connect,
@@ -207,6 +207,16 @@ export default function App() {
                   <span>Dashboard</span>
                 </button>
                 <button
+                  onClick={() => setActiveTab('dataset')}
+                  className={cn(
+                    "flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                    activeTab === 'dataset' ? "bg-zinc-800 text-zinc-100 shadow-sm" : "text-zinc-400 hover:text-zinc-200"
+                  )}
+                >
+                  <Table className="w-4 h-4" />
+                  <span>Dataset</span>
+                </button>
+                <button
                   onClick={handleGenerateReport}
                   disabled={data.length === 0}
                   className={cn(
@@ -284,6 +294,44 @@ export default function App() {
                       </div>
                     </motion.div>
                   ) : null
+                )}
+                {activeTab === 'dataset' && data.length > 0 && (
+                  <motion.div
+                    key="dataset"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="p-6"
+                  >
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-zinc-700">
+                            {Object.keys(data[0] || {}).map((key) => (
+                              <th key={key} className="text-left py-3 px-4 font-medium text-zinc-300 bg-zinc-800/50">
+                                {key}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.slice(0, 100).map((row, i) => (
+                            <tr key={i} className="border-b border-zinc-800 hover:bg-zinc-800/30">
+                              {Object.values(row).map((value: any, j) => (
+                                <td key={j} className="py-2 px-4 text-zinc-400">
+                                  {value !== null && value !== undefined ? String(value) : ''}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {data.length > 100 && (
+                        <p className="text-center text-zinc-500 py-4 text-sm">
+                          Showing first 100 of {data.length} rows
+                        </p>
+                      )}
+                    </div>
+                  </motion.div>
                 )}
               </AnimatePresence>
             </div>
