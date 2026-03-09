@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ChartConfig } from "@/components/Dashboard";
 
-const apiKey = process.env.GEMINI_API_KEY;
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export async function generateDashboardConfig(data: any[]): Promise<ChartConfig[]> {

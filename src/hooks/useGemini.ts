@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 
-const apiKey = process.env.GEMINI_API_KEY;
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export interface Caption {
