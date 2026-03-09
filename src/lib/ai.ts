@@ -6,15 +6,28 @@ const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export async function generateDashboardConfig(data: any[]): Promise<ChartConfig[]> {
   if (!data || data.length === 0) return [];
-  if (!ai) return [];
+  
+  const keys = Object.keys(data[0]);
+  const numericKeys = keys.filter(k => typeof data[0][k] === 'number');
+  const stringKeys = keys.filter(k => typeof data[0][k] === 'string');
+  
+  if (!ai) {
+    if (numericKeys.length > 0 && stringKeys.length > 0) {
+      return [
+        { id: 'chart1', type: 'bar', title: 'Data Overview', dataKey: numericKeys[0], xAxisKey: stringKeys[0] },
+        { id: 'chart2', type: 'line', title: 'Trend Analysis', dataKey: numericKeys[0], xAxisKey: stringKeys[0] },
+      ];
+    }
+    return [];
+  }
 
   // Take a sample of the data to avoid exceeding context limits
   const sample = data.slice(0, 5);
-  const keys = Object.keys(sample[0]);
+  const allKeys = Object.keys(sample[0]);
 
   const prompt = `
     Analyze the following JSON data sample and its keys.
-    Keys: ${keys.join(", ")}
+    Keys: ${allKeys.join(", ")}
     Sample: ${JSON.stringify(sample)}
 
     Generate a configuration for 3 to 4 charts to visualize this data effectively.
