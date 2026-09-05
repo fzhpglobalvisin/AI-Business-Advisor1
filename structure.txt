@@ -1,0 +1,39 @@
+ai_business_advisor_v1/
+├── 📁 .vercel                             # Vercel deployment metadata directory
+│   ├── 📄 project.json
+│   └── 📄 README.txt
+├── 📁 api
+│   └── 📄 sales.ts
+├── 📁 public                              # Public static assets folder
+│   ├── 📄 amazon.csv                      # Default dataset auto-loaded on boot
+│   └── 📄 favicon.ico
+├── 📁 src                                 # Frontend application source code
+│   ├── 📁 components                      # UI components and application views
+│   │   ├── 📄 Dashboard.tsx               # Standard Chart.js analytics dashboard (exports ChartConfig)
+│   │   ├── 📄 DataGrid.tsx
+│   │   ├── 📄 DynamicRechart.tsx          # Dynamic Recharts renderer for AI-generated charts
+│   │   ├── 📄 FileUpload.tsx              # File uploader dropzone (CSV & JSON support)
+│   │   ├── 📄 TableauCanvas.tsx           # Drag-and-drop field shelves with Tableau-style canvas
+│   │   └── 📄 VoiceAssistant.tsx          # Gemini Live audio visualization interface
+│   ├── 📁 hooks                           # Custom React Hooks
+│   │   └── 📄 useGemini.ts                # WebSocket client hook for gemini-3.1-flash-live-preview
+│   ├── 📁 lib                             # Application helper modules and AI integrations
+│   │   ├── 📄 ai copy.ts
+│   │   ├── 📄 ai.ts                       # Full business report generation logic
+│   │   ├── 📄 aiModeling.ts               # AI Data Modeling Agent (outputs Recharts JSON specs)
+│   │   ├── 📄 dataCleaner.ts
+│   │   ├── 📄 tableauCopilot.ts           # AI Copilot logic for Tableau canvas field mapping
+│   │   └── 📄 utils.ts                    # Tailwind class joiners (cn utility)
+│   ├── 📄 App.tsx                         # Main layout wrapper, tab navigation, and default dataset hydration
+│   ├── 📄 index.css                       # Global Tailwind CSS import declarations
+│   └── 📄 main.tsx                        # React DOM root bootstrap mounting entrypoint
+├── 📄 .env                                # API key secrets (VITE_GEMINI_API_KEY)
+├── 📄 .gitignore
+├── 📄 index.html                          # HTML application shell template
+├── 📄 metadata.json
+├── 📄 package.json                        # Dependencies, Vite scripts, and metadata
+├── 📄 README.md
+├── 📄 structure.js
+├── 📄 tsconfig.json                       # TypeScript compilation settings
+├── 📄 vercel.json
+└── 📄 vite.config.ts                      # Vite server configuration & alias path mappings

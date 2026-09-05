@@ -1,0 +1,10 @@
+# 1. Verify that your remote points to your repository URL
+git remote -v
+
+# 2. If the URL is missing or incorrect, set it using:
+git remote set-url origin https://github.com/fzhpglobalvisin/AI-Business-Advisor1.git
+
+# 3. Stage, commit, and push your changes
+git add .
+git commit -m "Fix JSX syntax errors and add local storage persistence for default dataset"
+git push -u origin main

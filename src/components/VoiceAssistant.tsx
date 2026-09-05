@@ -66,9 +66,9 @@ export function VoiceAssistant({
             isConnecting
               ? "bg-zinc-800 cursor-not-allowed"
               : isSpeaking
-              ? "bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/50"
+              ? "bg-linear-to-br from-blue-500 to-indigo-600 shadow-blue-500/50"
               : isListening
-              ? "bg-gradient-to-br from-emerald-400 to-teal-600 shadow-emerald-500/50"
+              ? "bg-linear-to-br from-emerald-400 to-teal-600 shadow-emerald-500/50"
               : "bg-zinc-800 hover:bg-zinc-700 shadow-black/50"
           )}
           whileHover={!isConnecting ? { scale: 1.05 } : {}}
@@ -86,7 +86,7 @@ export function VoiceAssistant({
 
       {/* Captions display - current conversation first */}
       {captions.length > 0 && (
-        <div className="w-full max-w-md mt-6 space-y-3 max-h-48 overflow-y-auto">
+        <div className="w-full max-w-md mt-6 space-y-3">
           {[...captions].reverse().map((caption) => (
             <div
               key={caption.id}
@@ -98,9 +98,9 @@ export function VoiceAssistant({
               )}
             >
               {caption.role === "user" ? (
-                <User className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                <User className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
               ) : (
-                <Bot className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                <Bot className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
               )}
               <span className="text-zinc-300" dir="auto">{caption.text}</span>
             </div>

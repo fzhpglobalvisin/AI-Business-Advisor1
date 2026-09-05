@@ -48,7 +48,7 @@ export async function generateDashboardConfig(data: any[]): Promise<ChartConfig[
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-live-preview",
+      model: "gemini-3.6-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -102,7 +102,7 @@ export async function generateReport(data: any[], language: string): Promise<str
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-live-preview",
+      model: "gemini-3.6-flash",
       contents: prompt,
     });
 

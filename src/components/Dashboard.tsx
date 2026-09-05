@@ -27,6 +27,16 @@ ChartJS.register(
   Filler
 );
 
+export interface ChartConfig {
+  id: string;
+  dataKey: string;
+  type: string;
+  title: string;
+  xAxisKey?: string;
+  yAxisKey?: string;
+  color?: string;
+}
+
 interface DashboardProps {
   data: any[];
 }

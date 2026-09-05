@@ -1,13 +1,15 @@
 import React, { useState, useRef } from "react";
-import { UploadCloud, FileText, X } from "lucide-react";
+import { UploadCloud, FileText, X, Archive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Papa from "papaparse";
+import JSZip from "jszip";
 
 interface FileUploadProps {
   onDataLoaded: (data: any[], fileName: string) => void;
+  onMultiDataLoaded?: (datasets: Record<string, any[]>) => void;
 }
 
-export function FileUpload({ onDataLoaded }: FileUploadProps) {
+export function FileUpload({ onDataLoaded, onMultiDataLoaded }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -21,9 +23,66 @@ export function FileUpload({ onDataLoaded }: FileUploadProps) {
     setIsDragging(false);
   };
 
-  const processFile = (file: File) => {
+  const processFile = async (file: File) => {
     setFileName(file.name);
-    if (file.name.endsWith(".csv")) {
+
+    // 1. Handle ZIP Archives
+    if (file.name.endsWith(".zip")) {
+      try {
+        const zip = new JSZip();
+        const unzipped = await zip.loadAsync(file);
+        const loadedDatasets: Record<string, any[]> = {};
+        const parsePromises: Promise<void>[] = [];
+
+        unzipped.forEach((relativePath, zipEntry) => {
+          // Ignore directory entries and hidden/system files (e.g. __MACOSX)
+          if (!zipEntry.dir && !relativePath.startsWith("__MACOSX")) {
+            const cleanName = relativePath.split("/").pop() || relativePath;
+
+            if (cleanName.endsWith(".csv")) {
+              const promise = zipEntry.async("string").then((csvText) => {
+                const parsed = Papa.parse(csvText, {
+                  header: true,
+                  dynamicTyping: true,
+                  skipEmptyLines: true,
+                });
+                loadedDatasets[cleanName] = parsed.data;
+              });
+              parsePromises.push(promise);
+            } else if (cleanName.endsWith(".json")) {
+              const promise = zipEntry.async("string").then((jsonText) => {
+                try {
+                  const parsed = JSON.parse(jsonText);
+                  loadedDatasets[cleanName] = Array.isArray(parsed) ? parsed : [parsed];
+                } catch (err) {
+                  console.error(`Failed to parse ${cleanName}`, err);
+                }
+              });
+              parsePromises.push(promise);
+            }
+          }
+        });
+
+        await Promise.all(parsePromises);
+
+        // If parent supports multi-dataset handling
+        if (onMultiDataLoaded) {
+          onMultiDataLoaded(loadedDatasets);
+        }
+
+        // Set primary data stream to the first unpacked file
+        const firstFileKey = Object.keys(loadedDatasets)[0];
+        if (firstFileKey) {
+          onDataLoaded(loadedDatasets[firstFileKey], firstFileKey);
+        }
+      } catch (err) {
+        console.error("Failed to unpack ZIP file:", err);
+        alert("Failed to extract files from the ZIP archive.");
+        setFileName(null);
+      }
+    } 
+    // 2. Handle Single CSV Files
+    else if (file.name.endsWith(".csv")) {
       Papa.parse(file, {
         header: true,
         dynamicTyping: true,
@@ -32,7 +91,9 @@ export function FileUpload({ onDataLoaded }: FileUploadProps) {
           onDataLoaded(results.data, file.name);
         },
       });
-    } else if (file.name.endsWith(".json")) {
+    } 
+    // 3. Handle Single JSON Files
+    else if (file.name.endsWith(".json")) {
       const reader = new FileReader();
       reader.onload = (e) => {
         try {
@@ -44,7 +105,7 @@ export function FileUpload({ onDataLoaded }: FileUploadProps) {
       };
       reader.readAsText(file);
     } else {
-      alert("Please upload a CSV or JSON file.");
+      alert("Please upload a CSV, JSON, or ZIP archive.");
       setFileName(null);
     }
   };
@@ -82,12 +143,12 @@ export function FileUpload({ onDataLoaded }: FileUploadProps) {
           <p className="text-sm font-medium text-zinc-200">
             Drag & drop your dataset here
           </p>
-          <p className="text-xs text-zinc-500 mt-1">Supports CSV and JSON</p>
+          <p className="text-xs text-zinc-500 mt-1">Supports CSV, JSON, and ZIP archives</p>
           <input
             type="file"
             ref={fileInputRef}
             className="hidden"
-            accept=".csv,.json"
+            accept=".csv,.json,.zip"
             onChange={handleFileChange}
           />
         </div>
@@ -95,10 +156,14 @@ export function FileUpload({ onDataLoaded }: FileUploadProps) {
         <div className="flex items-center justify-between bg-zinc-800 rounded-xl p-4 border border-zinc-700">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-emerald-500/20 rounded-lg">
-              <FileText className="w-5 h-5 text-emerald-400" />
+              {fileName.endsWith(".zip") ? (
+                <Archive className="w-5 h-5 text-emerald-400" />
+              ) : (
+                <FileText className="w-5 h-5 text-emerald-400" />
+              )}
             </div>
             <div>
-              <p className="text-sm font-medium text-zinc-200 truncate max-w-[150px]">
+              <p className="text-sm font-medium text-zinc-200 truncate max-w-37.5">
                 {fileName}
               </p>
               <p className="text-xs text-emerald-400">Dataset loaded</p>

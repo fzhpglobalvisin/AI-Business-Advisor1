@@ -1,3 +1,4 @@
+// D:\ai_business_advisor_v1\src\hooks\useGemini.ts
 import { useState, useRef, useCallback } from "react";
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 
@@ -11,6 +12,25 @@ export interface Caption {
   isFinished: boolean;
 }
 
+// Inline AudioWorklet processor script to run PCM processing off the main UI thread
+const pcmWorkletCode = `
+class PCMProcessor extends AudioWorkletProcessor {
+  process(inputs) {
+    const input = inputs[0];
+    if (input && input[0]) {
+      const inputData = input[0];
+      const pcm16 = new Int16Array(inputData.length);
+      for (let i = 0; i < inputData.length; i++) {
+        pcm16[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+      }
+      this.port.postMessage(pcm16.buffer, [pcm16.buffer]);
+    }
+    return true;
+  }
+}
+registerProcessor('pcm-processor', PCMProcessor);
+`;
+
 export function useGemini() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -22,7 +42,7 @@ export function useGemini() {
   const sessionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const playbackQueueRef = useRef<Float32Array[]>([]);
   const isPlayingRef = useRef(false);
@@ -86,17 +106,20 @@ export function useGemini() {
         },
       });
 
+      // Load AudioWorklet from dynamic blob URL
+      const blob = new Blob([pcmWorkletCode], { type: "application/javascript" });
+      const workletUrl = URL.createObjectURL(blob);
+      await audioContextRef.current.audioWorklet.addModule(workletUrl);
+
       sourceRef.current = audioContextRef.current.createMediaStreamSource(
         mediaStreamRef.current
       );
-      processorRef.current = audioContextRef.current.createScriptProcessor(
-        4096,
-        1,
-        1
+      workletNodeRef.current = new AudioWorkletNode(
+        audioContextRef.current,
+        "pcm-processor"
       );
 
-      sourceRef.current.connect(processorRef.current);
-      processorRef.current.connect(audioContextRef.current.destination);
+      sourceRef.current.connect(workletNodeRef.current);
 
       const sessionPromise = ai.live.connect({
         model: "gemini-2.5-flash-native-audio-preview-09-2025",
@@ -116,26 +139,25 @@ export function useGemini() {
             setIsConnected(true);
             setIsConnecting(false);
             setIsListening(true);
-            
-            processorRef.current!.onaudioprocess = (e) => {
-              const inputData = e.inputBuffer.getChannelData(0);
-              const pcm16 = new Int16Array(inputData.length);
-              for (let i = 0; i < inputData.length; i++) {
-                pcm16[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
-              }
-              const base64 = btoa(
-                String.fromCharCode(...new Uint8Array(pcm16.buffer))
-              );
-              sessionPromise.then((session) =>
-                session.sendRealtimeInput({
-                  media: { data: base64, mimeType: "audio/pcm;rate=16000" },
-                })
-              );
-            };
+
+            // Audio processing runs on separate thread, posted back via message event
+            if (workletNodeRef.current) {
+              workletNodeRef.current.port.onmessage = (e) => {
+                const pcmBuffer = e.data;
+                const pcm16 = new Int16Array(pcmBuffer);
+                const base64 = btoa(
+                  String.fromCharCode(...new Uint8Array(pcm16.buffer))
+                );
+                sessionPromise.then((session) =>
+                  session.sendRealtimeInput({
+                    media: { data: base64, mimeType: "audio/pcm;rate=16000" },
+                  })
+                );
+              };
+            }
           },
           onmessage: (message: LiveServerMessage) => {
-            const base64Audio =
-              message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+            const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
             if (base64Audio) {
               const binaryString = atob(base64Audio);
               const bytes = new Uint8Array(binaryString.length);
@@ -216,9 +238,9 @@ export function useGemini() {
       sessionRef.current.close();
       sessionRef.current = null;
     }
-    if (processorRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current = null;
+    if (workletNodeRef.current) {
+      workletNodeRef.current.disconnect();
+      workletNodeRef.current = null;
     }
     if (sourceRef.current) {
       sourceRef.current.disconnect();
