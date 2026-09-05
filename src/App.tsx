@@ -27,6 +27,7 @@ export default function App() {
   const [fileName, setFileName] = useState<string>("amazon.csv");
   const [language, setLanguage] = useState(LANGUAGES[0]);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [report, setReport] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'dataset' | 'dashboard' | 'report'>('dataset');
 
@@ -112,60 +113,59 @@ export default function App() {
     }
   };
 
+  // Export current tab (Grid, Dashboard Charts, or AI Report) directly as a PDF document
   const handleDownloadReport = async () => {
-    if (data.length === 0) return;
+  const element = document.getElementById("export-container");
+  if (!element) return;
 
-    let currentReport = report;
-    if (!currentReport) {
-      setIsGeneratingReport(true);
-      currentReport = await generateReport(data, language.name);
-      setReport(currentReport);
-      setIsGeneratingReport(false);
+  setIsExportingPdf(true);
+
+  try {
+    if (!(window as any).html2pdf) {
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error("Failed to load PDF engine"));
+        document.head.appendChild(script);
+      });
     }
 
-    if (!currentReport) return;
+    const opt = {
+      margin: [0.3, 0.3, 0.3, 0.3],
+      filename: `${activeTab.toUpperCase()}_Report_${fileName.split(".")[0] || "Dataset"}.pdf`,
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#09090b",
+        onclone: (clonedDoc: Document) => {
+          // Fix Tailwind oklch error by converting element styles to standard RGB
+          const allElements = clonedDoc.querySelectorAll("*");
+          allElements.forEach((el) => {
+            const style = window.getComputedStyle(el);
+            if (style.backgroundColor.includes("oklch")) {
+              (el as HTMLElement).style.backgroundColor = "#18181b";
+            }
+            if (style.color.includes("oklch")) {
+              (el as HTMLElement).style.color = "#f4f4f5";
+            }
+            if (style.borderColor.includes("oklch")) {
+              (el as HTMLElement).style.borderColor = "#27272a";
+            }
+          });
+        },
+      },
+      jsPDF: { unit: "in", format: "letter", orientation: activeTab === "report" ? "portrait" : "landscape" },
+    };
 
-    // Convert raw Markdown text to styled HTML for seamless document opening
-    const formattedBody = currentReport
-      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/^\* (.*$)/gim, '<ul><li>$1</li></ul>')
-      .replace(/<\/ul>\s*<ul>/g, '')
-      .replace(/\n\n/g, '<br><br>');
-
-    const htmlDocument = `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Executive Briefing</title>
-    <style>
-      body { font-family: Segoe UI, Helvetica, Arial, sans-serif; line-height: 1.6; color: #111827; padding: 32px; max-width: 800px; margin: 0 auto; }
-      h1 { color: #047857; font-size: 24px; border-bottom: 2px solid #047857; padding-bottom: 8px; margin-top: 24px; }
-      h2 { color: #065f46; font-size: 20px; margin-top: 20px; }
-      h3 { color: #047857; font-size: 16px; margin-top: 16px; }
-      strong { color: #047857; }
-      ul { margin-bottom: 12px; }
-      li { margin-bottom: 6px; }
-    </style>
-  </head>
-  <body>
-    ${formattedBody}
-  </body>
-</html>`;
-
-    const blob = new Blob([htmlDocument], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Executive_Summary_${fileName.split(".")[0] || "Dataset"}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
+    await (window as any).html2pdf().set(opt).from(element).save();
+  } catch (err) {
+    console.error("PDF Export error:", err);
+  } finally {
+    setIsExportingPdf(false);
+  }
+};
 
   return (
     <div className="min-h-screen w-full bg-zinc-950 text-zinc-100 font-sans selection:bg-emerald-500/30">
@@ -200,7 +200,7 @@ export default function App() {
 
           <button
             onClick={handleDownloadReport}
-            disabled={data.length === 0 || isGeneratingReport}
+            disabled={data.length === 0 || isExportingPdf}
             className={cn(
               "flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
               data.length === 0
@@ -208,12 +208,12 @@ export default function App() {
                 : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
             )}
           >
-            {isGeneratingReport ? (
+            {isExportingPdf ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Download className="w-4 h-4" />
             )}
-            <span>{isGeneratingReport ? "Generating..." : "Download Report"}</span>
+            <span>{isExportingPdf ? "Exporting PDF..." : "Download PDF Report"}</span>
           </button>
         </div>
       </header>
@@ -303,7 +303,8 @@ export default function App() {
               )}
             </div>
 
-            <div className="p-4 flex-1">
+            {/* Target Container for PDF Export */}
+            <div id="export-container" className="p-4 flex-1">
               <AnimatePresence mode="wait">
                 {activeTab === 'dataset' && (
                   <motion.div
